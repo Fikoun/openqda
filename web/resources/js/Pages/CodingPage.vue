@@ -222,9 +222,27 @@ watch(invivoText, (nexText) => {
 // NEW CODE CREATION
 const createNewCodeSchema = ref();
 const openCreateCodeDialog = () => {
+  // Flatten all codes from all codebooks for parent selection
+  const flattenCodes = (codeArray) => {
+    const result = [];
+    codeArray.forEach(code => {
+      result.push(code);
+      if (code.children && code.children.length > 0) {
+        result.push(...flattenCodes(code.children));
+      }
+    });
+    return result;
+  };
+  
+  // Get all codes flattened
+  const allCodesFlat = flattenCodes(codes.value);
+  
+  // We'll filter by codebook dynamically based on selection
+  // For now, pass all codes - filtering will happen in the schema
   createNewCodeSchema.value = createCodeSchema({
     title: text?.value,
     codebooks: codebooks.value,
+    codes: allCodesFlat,
   });
 };
 

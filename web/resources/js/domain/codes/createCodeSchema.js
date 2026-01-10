@@ -7,6 +7,7 @@ export const createCodeSchema = ({
   codebooks,
   codes,
   parent,
+  codebookId,
 }) => {
   const schema = {
     title: {
@@ -30,7 +31,7 @@ export const createCodeSchema = ({
     schema.codebookId = {
       type: Number,
       label: 'Codebook',
-      defaultValue: codebooks?.[0]?.id,
+      defaultValue: codebookId ?? codebooks?.[0]?.id,
       options: codebooks?.map((c) => ({
         value: c.id,
         label: c.name,
@@ -38,14 +39,23 @@ export const createCodeSchema = ({
     };
   }
   if (codes) {
+    // Filter codes by the selected/default codebook
+    const selectedCodebookId = codebookId ?? codebooks?.[0]?.id;
+    const filteredCodes = selectedCodebookId 
+      ? codes.filter(c => c.codebook === selectedCodebookId)
+      : codes;
+    
     schema.parentId = {
       type: String,
       optional: true,
-      label: 'Parent code',
-      options: codes.map((c) => ({
-        value: c.id,
-        label: c.name,
-      })),
+      label: 'Parent code (optional)',
+      options: [
+        { value: '', label: '-- No parent --' },
+        ...filteredCodes.map((c) => ({
+          value: c.id,
+          label: c.name,
+        }))
+      ],
     };
     if (parent) {
       schema.parentId.defaultValue = parent.id;

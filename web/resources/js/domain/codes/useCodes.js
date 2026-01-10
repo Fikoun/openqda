@@ -150,7 +150,7 @@ export const useCodes = () => {
     }
 
     const code = codeStore.entry(codeId);
-    const parent = parentId && codeStore.entry(parentId);
+    const parent = parentId ? codeStore.entry(parentId) : null;
 
     // check legitimacy of this operation
     if (parent && !CodeList.dropAllowed(code, parent)) {
@@ -160,30 +160,56 @@ export const useCodes = () => {
     }
 
     const oldParent = code.parent;
-    //
-    // // optimistic UI
-    codeStore.update(code.id, { parent });
-    // if (parent) {
-    //   parent.children = parent.children ?? [];
-    //   parent.children.push(code);
-    // }
-    // code.parent = parent;
-    //
-    // // TODO make optimistic UI procedures
-    // //   a command-pattern that can be undone
+    const oldChildren = oldParent?.children ? [...oldParent.children] : null;
+    const oldParentChildren = parent?.children ? [...parent.children] : null;
+    
+    // Optimistically update the UI
+    // Remove from old parent's children
+    if (oldParent && oldParent.children) {
+      const index = oldParent.children.findIndex(c => c.id === code.id);
+      if (index > -1) {
+        oldParent.children.splice(index, 1);
+      }
+    }
+    
+    // Add to new parent's children
+    if (parent) {
+      if (!parent.children) {
+        parent.children = [];
+      }
+      parent.children.push(code);
+    }
+    
+    // Update the code's parent reference and notify store of all affected codes
+    code.parent = parent;
+    const affectedCodes = [code];
+    if (oldParent) affectedCodes.push(oldParent);
+    if (parent) affectedCodes.push(parent);
+    
+    // Update through store to trigger reactivity
+    codeStore.update(() => affectedCodes);
+    
     const rollback = () => {
-      codeStore.update(code.id, { parent: oldParent });
-      parent.children.pop();
+      // Restore old parent relationship
+      if (parent && oldParentChildren) {
+        parent.children = oldParentChildren;
+      }
+      
+      if (oldParent && oldChildren) {
+        oldParent.children = oldChildren;
+      }
+      
       code.parent = oldParent;
+      codeStore.update(() => affectedCodes);
     };
-    //
+    
     const { response, error } = await Codes.update({
       projectId,
       source,
       code,
       parent,
     });
-    //
+    
     if (error) {
       rollback();
       throw error;
@@ -192,8 +218,6 @@ export const useCodes = () => {
       rollback();
       throw new Error(response.data.message);
     }
-    //
-    // return true;
   };
 
   const computedCodes = computed(() => {
