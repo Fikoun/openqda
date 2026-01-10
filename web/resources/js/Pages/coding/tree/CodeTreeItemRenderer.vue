@@ -31,7 +31,7 @@ import { rgbToHex } from '../../../utils/color/toHex';
 import { useSelections } from '../selections/useSelections';
 import FormDialog from '../../../dialogs/FormDialog.vue';
 
-const { createCode, toggleCode, createCodeSchema, getCodebook } = useCodes();
+const { createCode, toggleCode, createCodeSchema, getCodebook, addCodeToParent } = useCodes();
 const { collapsed, toggleCollapse } = useCodeTree();
 const { getMemberBy } = useUsers();
 const Selections = useSelections();
@@ -132,6 +132,73 @@ const openCreateSubcodeDialog = (parent) => {
   });
   schema.color.defaultValue = rgbToHex(parent.color);
   createNewCodeSchema.value = schema;
+};
+
+// CHANGE PARENT
+const changeParentSchema = ref();
+const openChangeParentDialog = (code) => {
+  // Flatten all codes from the same codebook except the code itself and its children
+  const flattenCodes = (codeArray, excludeIds = new Set()) => {
+    const result = [];
+    codeArray.forEach(c => {
+      if (!excludeIds.has(c.id) && c.codebook === code.codebook) {
+        result.push(c);
+        if (c.children && c.children.length > 0) {
+          result.push(...flattenCodes(c.children, excludeIds));
+        }
+      }
+    });
+    return result;
+  };
+  
+  // Get all descendant IDs to exclude
+  const getDescendantIds = (c) => {
+    const ids = new Set([c.id]);
+    if (c.children && c.children.length > 0) {
+      c.children.forEach(child => {
+        getDescendantIds(child).forEach(id => ids.add(id));
+      });
+    }
+    return ids;
+  };
+  
+  const excludeIds = getDescendantIds(code);
+  const codebook = getCodebook(code.codebook);
+  
+  // Get all codes from store and filter
+  const { codes } = useCodes();
+  const availableCodes = flattenCodes(codes.value, excludeIds);
+  
+  const schema = {
+    parentId: {
+      type: String,
+      optional: true,
+      label: 'Parent code',
+      defaultValue: code.parent?.id ?? '',
+      options: [
+        { value: '', label: '-- No parent (make root code) --' },
+        ...availableCodes.map((c) => ({
+          value: c.id,
+          label: c.name,
+        }))
+      ],
+    },
+  };
+  
+  changeParentSchema.value = schema;
+};
+
+const handleChangeParent = async (formData) => {
+  const parentId = formData.parentId || null;
+  await attemptAsync(() => addCodeToParent({ 
+    codeId: props.code.id, 
+    parentId 
+  }));
+  changeParentSchema.value = null;
+  
+  // Force a re-render by triggering parent component update
+  // The code tree will re-render when it detects changes to the parent/children structure
+  return { response: { status: 200 } };
 };
 
 //------------------------------------------------------------------------
@@ -280,6 +347,24 @@ const { range } = useRange();
                   >
                     <PlusIcon class="w-4 h-4 me-2" />
                     <span>Add subcode</span>
+                  </div>
+                </template>
+              </FormDialog>
+            </DropdownLink>
+            <DropdownLink as="button">
+              <FormDialog
+                :schema="changeParentSchema"
+                :title="`Change parent of ${code.name}`"
+                button-title="Update parent"
+                :submit="handleChangeParent"
+              >
+                <template #trigger="{ trigger }">
+                  <div
+                    @click="trigger(() => openChangeParentDialog(code))"
+                    class="flex items-center"
+                  >
+                    <BarsArrowDownIcon class="w-4 h-4 me-2" />
+                    <span>Change parent</span>
                   </div>
                 </template>
               </FormDialog>
