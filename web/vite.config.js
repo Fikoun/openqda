@@ -30,6 +30,11 @@ export default defineConfig({
         sourcemap: true
     },
     server: {
+        hmr: {
+            host: 'localhost',
+        },
+        origin: 'http://localhost:5173',
+        cors: true,
         watch: {
             ignored: [
                 '.idea',
