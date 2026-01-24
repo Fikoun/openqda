@@ -29,7 +29,7 @@ const setCurrent = (value) => {
       <select
         id="tabs"
         name="tabs"
-        class="block w-full rounded-md focus:border-secondary focus:ring-secondary bg-surface text-foreground"
+        class="block w-full rounded-md focus:border-secondary focus:ring-secondary  text-foreground"
         @change="(e) => setCurrent(e.target.value)"
       >
         <option

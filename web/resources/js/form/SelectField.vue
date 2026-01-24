@@ -25,7 +25,7 @@ const current = ref(props.value);
       :id="props.name"
       v-model="current"
       :name="props.name"
-      class="block w-full rounded-md focus:border-secondary focus:ring-secondary bg-surface text-foreground"
+      class="block w-full rounded-md focus:border-secondary focus:ring-secondary  text-foreground"
       @change="(e) => (current = e.target.value)"
     >
       <option v-if="props.options || props.defaultOption" disabled value="">
