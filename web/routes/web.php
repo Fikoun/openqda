@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdditionalTeamController;
 use App\Http\Controllers\AnalysisController;
 use App\Http\Controllers\AuditsController;
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CodebookCodesController;
 use App\Http\Controllers\CodebookController;
 use App\Http\Controllers\CodingController;
@@ -119,7 +120,16 @@ Route::middleware([
      * Analysis
      */
     Route::get('/projects/{project}/analysis', [AnalysisController::class, 'show'])->name('analysis.show');
-    Route::get('/projects/{project}/analysis', [AnalysisController::class, 'show'])->name('analysis.show');
+
+    /**
+     * Categories
+     */
+    Route::get('/projects/{project}/categories', [CategoryController::class, 'index'])->name('category.index');
+    Route::post('/projects/{project}/categories', [CategoryController::class, 'store'])->name('category.store');
+    Route::patch('/projects/{project}/categories/{category}', [CategoryController::class, 'update'])->name('category.update');
+    Route::delete('/projects/{project}/categories/{category}', [CategoryController::class, 'destroy'])->name('category.destroy');
+    Route::post('/projects/{project}/categories/{category}/attach-codes', [CategoryController::class, 'attachCodes'])->name('category.attach-codes');
+    Route::post('/projects/{project}/categories/{category}/detach-codes', [CategoryController::class, 'detachCodes'])->name('category.detach-codes');
 
     /**
      * Selection
