@@ -99,6 +99,23 @@
             />
           </div>
 
+          <!-- Active category filter badge -->
+          <div
+            v-if="activeCategoryFilter"
+            class="mb-3 flex items-center gap-2 px-2 py-1.5 rounded-md bg-primary/10 text-sm"
+          >
+            <span class="truncate">
+              Filtered by: <strong>{{ activeCategoryFilter.name }}</strong>
+            </span>
+            <button
+              @click="activeCategoryFilter = null"
+              class="ml-auto text-foreground/60 hover:text-foreground text-xs shrink-0"
+              title="Clear category filter"
+            >
+              &times;
+            </button>
+          </div>
+
           <!-- Edit code dialog -->
           <FormDialog
             :title="`Edit ${editCodeTarget?.name}`"
@@ -142,8 +159,8 @@
                   <input
                     id="all_codes"
                     type="checkbox"
-                    :checked="allCodesChecked"
-                    @change="checkCode('all')"
+                    :checked="allFilteredCodesChecked"
+                    @change="handleCheckAllCodes"
                   />
                 </td>
               </tr>
@@ -263,7 +280,11 @@
                 <div
                   v-for="category in projectCategories"
                   :key="category.id"
-                  class="flex items-center justify-between px-2 py-1.5 rounded-md text-sm hover:bg-foreground/5"
+                  class="flex items-center justify-between px-2 py-1.5 rounded-md text-sm cursor-pointer transition-colors"
+                  :class="activeCategoryFilter?.id === category.id
+                    ? 'bg-primary/10 ring-1 ring-primary/30'
+                    : 'hover:bg-foreground/5'"
+                  @click="handleCategoryClick(category)"
                 >
                   <div class="min-w-0 flex-1">
                     <span class="font-medium truncate">{{ category.name }}</span>
@@ -275,7 +296,7 @@
                     </span>
                   </div>
                   <button
-                    @click="removeCategory(category)"
+                    @click.stop="removeCategory(category)"
                     class="text-destructive/60 hover:text-destructive text-xs px-1 shrink-0"
                     title="Delete category"
                   >
@@ -394,6 +415,7 @@ const {
   checkedCodes,
   allCodesChecked,
   checkCode,
+  selectCodes,
   sources,
   checkedSources,
   allSourcesChecked,
@@ -532,20 +554,71 @@ const removeCategory = async (category) => {
 // CODE FILTERING
 //------------------------------------------------------------------------
 const codeSearchQuery = ref('');
+const activeCategoryFilter = ref(null);
 
 const filteredCodes = computed(() => {
+  let result = codes.value;
+
+  // Filter by category first
+  if (activeCategoryFilter.value) {
+    const categoryCodeIds = new Set(
+      (activeCategoryFilter.value.codes ?? []).map((c) => c.id)
+    );
+    result = result.filter((code) => categoryCodeIds.has(code.id));
+  }
+
+  // Then filter by search
   const searchQuery = codeSearchQuery.value
     .toLowerCase()
     .replace(whitespace, '');
-  if (searchQuery.length < 2) return codes.value;
+  if (searchQuery.length >= 2) {
+    result = result.filter((code) =>
+      code.name.toLowerCase().replace(whitespace, '').includes(searchQuery)
+    );
+  }
 
-  const filterFn = (code) => {
-    if (!code) return false;
-    return code.name.toLowerCase().replace(whitespace, '').includes(searchQuery);
-  };
-
-  return codes.value.filter(filterFn);
+  return result;
 });
+
+const isFilterActive = computed(() => {
+  return (
+    activeCategoryFilter.value !== null ||
+    codeSearchQuery.value.toLowerCase().replace(whitespace, '').length >= 2
+  );
+});
+
+const allFilteredCodesChecked = computed(() => {
+  if (isFilterActive.value) {
+    return (
+      filteredCodes.value.length > 0 &&
+      filteredCodes.value.every((code) => checkedCodes.value.get(code.id))
+    );
+  }
+  return allCodesChecked.value;
+});
+
+const handleCheckAllCodes = () => {
+  if (isFilterActive.value) {
+    checkCode('all', filteredCodes.value);
+  } else {
+    checkCode('all');
+  }
+};
+
+const handleCategoryClick = (category) => {
+  // Toggle: if same category clicked, clear filter
+  if (activeCategoryFilter.value?.id === category.id) {
+    activeCategoryFilter.value = null;
+    return;
+  }
+
+  activeCategoryFilter.value = category;
+  codeSearchQuery.value = ''; // Clear search when selecting a category
+
+  // Select only this category's codes
+  const categoryCodeIds = (category.codes ?? []).map((c) => c.id);
+  selectCodes(categoryCodeIds);
+};
 
 //------------------------------------------------------------------------
 // CODE EDITING

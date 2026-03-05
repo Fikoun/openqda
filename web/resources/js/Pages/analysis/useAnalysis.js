@@ -56,21 +56,40 @@ export const useAnalysis = () => {
       .toSorted(byName)
   );
 
-  const checkCode = (id) => {
+  const checkCode = (id, filteredCodesList) => {
     const isAllCodes = id === 'all';
 
     if (isAllCodes) {
-      const newCheckValue = !state.allCodesChecked;
-      getAllCodes().forEach((code) =>
+      const codesToToggle = filteredCodesList || getAllCodes();
+      const allCurrentlyChecked = codesToToggle.every(
+        (code) => !!state.checkedCodes.get(code.id)
+      );
+      const newCheckValue = !allCurrentlyChecked;
+      codesToToggle.forEach((code) =>
         state.checkedCodes.set(code.id, newCheckValue)
       );
-      state.allCodesChecked = newCheckValue;
+      state.allCodesChecked = getAllCodes().every(
+        (code) => !!state.checkedCodes.get(code.id)
+      );
     } else {
       const isChecked = !!state.checkedCodes.get(id);
       state.checkedCodes.set(id, !isChecked);
-      state.allCodesChecked = false;
+      state.allCodesChecked = getAllCodes().every(
+        (code) => !!state.checkedCodes.get(code.id)
+      );
     }
 
+    updateHasSelection();
+  };
+
+  const selectCodes = (codeIds) => {
+    const idSet = new Set(codeIds);
+    getAllCodes().forEach((code) => {
+      state.checkedCodes.set(code.id, idSet.has(code.id));
+    });
+    state.allCodesChecked = getAllCodes().every(
+      (code) => !!state.checkedCodes.get(code.id)
+    );
     updateHasSelection();
   };
 
@@ -154,6 +173,7 @@ export const useAnalysis = () => {
     hasSelections,
     checkSource,
     checkCode,
+    selectCodes,
     codes: allCodes,
     sources: allSources,
   };
