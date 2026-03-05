@@ -145,7 +145,7 @@ class CodebookCodesController extends Controller
             $code = new Code;
             $code->id = (string) Str::uuid();
             $code->name = (string) $xmlCode['name'] ?: 'Unnamed Code';
-            $code->color = (string) $xmlCode['color'] ?: $this->getRandomColor(0.5);
+            $code->color = (string) $xmlCode['color'] ?: '#ebebeb';
             $code->codebook_id = $codebookId;
             $code->description = (string) $xmlCode->Description ?: '';
             $code->parent_id = $parentId;

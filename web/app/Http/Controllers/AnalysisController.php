@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ShowAnalysisPage;
+use App\Models\Category;
 use App\Models\Code;
 use App\Models\Project;
 use App\Models\Source;
@@ -55,6 +56,12 @@ class AnalysisController extends Controller
                 ->get();
 
             $allCodes = $rootCodes->map(fn ($code) => $this->buildNestedCode($code));
+
+            // Fetch categories with their codes and children
+            $categories = Category::where('project_id', $project->id)
+                ->with(['codes', 'children'])
+                ->get();
+
             // collaboration
             if ($project->team) {
                 $team = $project->team->load('users');
@@ -67,6 +74,7 @@ class AnalysisController extends Controller
                 'sources' => $sources,
                 'codes' => $allCodes,
                 'codebooks' => $codebooks,
+                'categories' => $categories,
                 'project' => [
                     'name' => $project->name,
                     'description' => $project->description,

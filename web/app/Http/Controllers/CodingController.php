@@ -32,7 +32,7 @@ class CodingController extends Controller
         $code = new Code;
         $code->name = $request->input('title');
         $code->description = $request->input('description');
-        $code->color = $request->input('color');
+        $code->color = $request->input('color', '#ebebeb');
         $code->codebook_id = $request->input('codebook');
         if ($request->input('parent_id')) {
             $code->parent_id = $request->input('parent_id');

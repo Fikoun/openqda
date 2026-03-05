@@ -1,4 +1,7 @@
-import { randomColor } from '../../utils/random/randomColor.js';
+/**
+ * Default color for codes that are not grouped under a category.
+ */
+const DEFAULT_CODE_COLOR = '#ebebeb';
 
 export const createCodeSchema = ({
   title,
@@ -24,7 +27,7 @@ export const createCodeSchema = ({
     color: {
       type: String,
       formType: 'color',
-      defaultValue: color ?? randomColor({ type: 'hex', opacity: -1 }),
+      defaultValue: color ?? DEFAULT_CODE_COLOR,
     },
   };
   if (codebooks) {

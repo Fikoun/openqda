@@ -12,23 +12,43 @@
 
         <div
           v-if="menuView === 'export'"
-          class="p-3 rounded-md border border-border flex items-center"
+          class="flex flex-col gap-3"
         >
-          <p class="text-sm text-foreground/60 me-3">
-            You can export your data to a table in csv format. Note, that data
-            is filtered, based on selected sources and codes.
-          </p>
-          <Button
-            @click="exportToCSV({ contents: selection, users: allUsers })"
-            :disabled="!hasSelections"
-            :title="
-              hasSelections
-                ? 'Export to CSV'
-                : 'Select at least one File and Code to export'
-            "
-          >
-            Export to CSV
-          </Button>
+          <div class="p-3 rounded-md border border-border flex items-center">
+            <p class="text-sm text-foreground/60 me-3">
+              You can export your data to a table in csv format. Note, that data
+              is filtered, based on selected sources and codes.
+            </p>
+            <Button
+              @click="exportToCSV({ contents: selection, users: allUsers })"
+              :disabled="!hasSelections"
+              :title="
+                hasSelections
+                  ? 'Export to CSV'
+                  : 'Select at least one File and Code to export'
+              "
+            >
+              Export to CSV
+            </Button>
+          </div>
+
+          <div class="p-3 rounded-md border border-border flex items-center">
+            <p class="text-sm text-foreground/60 me-3">
+              Export your category &amp; code tree as an SVG image, reflecting
+              the same hierarchy shown in the Category / Theme tree view.
+            </p>
+            <Button
+              @click="handleExportTreeGraph"
+              :disabled="!hasTreeData"
+              :title="
+                hasTreeData
+                  ? 'Export tree graph as SVG'
+                  : 'No categories or codes available to export'
+              "
+            >
+              Export Tree Graph
+            </Button>
+          </div>
         </div>
 
         <div v-show="menuView === 'sources'" class="flex flex-col gap-4">
@@ -90,6 +110,17 @@
             @created="closeEditCodeDialog"
           />
 
+          <!-- Group codes dialog -->
+          <GroupCodesDialog
+            :show="showGroupDialog"
+            :selectedCodeIds="selectedCodeIds"
+            :codes="codes"
+            :categories="projectCategories"
+            :submit="handleGroupCodes"
+            @close="closeGroupDialog"
+            @created="closeGroupDialog"
+          />
+
           <table class="w-full border-collapse border-0">
             <thead>
               <tr class="border-0">
@@ -124,16 +155,35 @@
                 <td class="tracking-wide border-0 rounded-md">
                   <label
                     :for="code.id"
-                    class="cursor-pointer select-none line-clamp-1 rounded-md p-2 my-2 flex"
-                    :style="{
-                      backgroundColor: code.color,
-                      opacity: checkedCodes.get(code.id) ? 1 : 0.3,
-                    }"
+                    class="cursor-pointer select-none line-clamp-1 rounded-md p-2 my-2 flex items-center gap-2"
+                    :style="codeCategoryColors.has(code.id)
+                      ? { backgroundColor: '#ebebeb', border: '1px solid #000' }
+                      : { backgroundColor: code.color }"
+                    :title="code.name"
                   >
-                    <ContrastText class="grow line-clamp-1">{{
-                      code.name
-                    }}</ContrastText>
-                    <span class="flex items-center">
+                    <!-- Category color dots -->
+                    <span
+                      v-if="codeCategoryColors.has(code.id)"
+                      class="flex flex-col gap-0.5 shrink-0"
+                    >
+                      <span
+                        v-for="(catColor, idx) in codeCategoryColors.get(code.id)"
+                        :key="idx"
+                        class="w-2.5 h-2.5 rounded-full"
+                        :style="{ backgroundColor: catColor }"
+                      />
+                    </span>
+                    <span class="grow line-clamp-1"
+                      :class="codeCategoryColors.has(code.id) ? 'text-foreground' : ''"
+                    >
+                      <ContrastText v-if="!codeCategoryColors.has(code.id)">{{
+                        code.name
+                      }}</ContrastText>
+                      <template v-else>{{ code.name }}</template>
+                    </span>
+                    <span class="flex items-center"
+                      :class="codeCategoryColors.has(code.id) ? 'text-foreground/60' : ''"
+                    >
                       <BarsArrowDownIcon class="w-4 h-4 me-1" />
                       {{ code.text.length }}
                     </span>
@@ -161,6 +211,82 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Floating group bar – sticky at the bottom of the sidebar -->
+        <div
+          v-if="menuView === 'codes'"
+          class="sticky bottom-0 z-10 bg-surface border-t border-border shadow-[0_-2px_8px_rgba(0,0,0,0.08)] rounded-t-lg px-3 py-2"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <Button
+              size="sm"
+              :disabled="!hasSelectedCodes"
+              @click="openGroupDialog"
+              :title="
+                hasSelectedCodes
+                  ? `Group ${selectedCodeIds.length} code${selectedCodeIds.length === 1 ? '' : 's'} into a category`
+                  : 'Select at least 1 code to group'
+              "
+            >
+              Group selected ({{ selectedCodeIds.length }})
+            </Button>
+
+            <button
+              v-if="projectCategories.length > 0"
+              @click="categoriesPanelOpen = !categoriesPanelOpen"
+              class="inline-flex items-center gap-1 text-xs text-foreground/60 hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-foreground/5"
+            >
+              <ChevronUpIcon
+                class="w-3.5 h-3.5 transition-transform"
+                :class="{ 'rotate-180': categoriesPanelOpen }"
+              />
+              Categories ({{ projectCategories.length }})
+            </button>
+          </div>
+
+          <!-- Expandable categories panel -->
+          <Transition
+            enter-active-class="transition-all duration-200 ease-out"
+            enter-from-class="max-h-0 opacity-0"
+            enter-to-class="max-h-60 opacity-100"
+            leave-active-class="transition-all duration-150 ease-in"
+            leave-from-class="max-h-60 opacity-100"
+            leave-to-class="max-h-0 opacity-0"
+          >
+            <div
+              v-if="categoriesPanelOpen && projectCategories.length > 0"
+              class="mt-2 overflow-hidden"
+            >
+              <div
+                class="max-h-48 overflow-y-auto space-y-1 border border-border rounded-md p-2 bg-background"
+              >
+                <div
+                  v-for="category in projectCategories"
+                  :key="category.id"
+                  class="flex items-center justify-between px-2 py-1.5 rounded-md text-sm hover:bg-foreground/5"
+                >
+                  <div class="min-w-0 flex-1">
+                    <span class="font-medium truncate">{{ category.name }}</span>
+                    <span class="ml-1.5 text-xs text-foreground/40">{{
+                      category.type
+                    }}</span>
+                    <span class="ml-1.5 text-xs text-foreground/40">
+                      ({{ category.codes?.length ?? 0 }} codes)
+                    </span>
+                  </div>
+                  <button
+                    @click="removeCategory(category)"
+                    class="text-destructive/60 hover:text-destructive text-xs px-1 shrink-0"
+                    title="Delete category"
+                  >
+                    &times;
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
         <div class="mt-auto">
           <Footer />
         </div>
@@ -209,14 +335,17 @@ import BaseContainer from '../Layouts/BaseContainer.vue';
 import ResponsiveTabList from '../Components/lists/ResponsiveTabList.vue';
 import FilesList from '../Components/files/FilesList.vue';
 import { useExport } from '../exchange/useExport.js';
+import { exportTreeGraphAsPNG } from '../exchange/useTreeGraphExport.js';
 import { trunc } from '../utils/string/trunc.ts';
 import {
   BarsArrowDownIcon,
+  ChevronUpIcon,
   PencilIcon,
 } from '@heroicons/vue/24/solid/index.js';
 import { useAnalysis } from './analysis/useAnalysis.js';
 import VisualizeCoding from './analysis/visualization/VisualizeCoding.vue';
 import { useVisualizerPlugins } from './analysis/visualization/useVisualizerPlugins.js';
+import GroupCodesDialog from './analysis/GroupCodesDialog.vue';
 
 import SelectField from '../form/SelectField.vue';
 import InputField from '../form/InputField.vue';
@@ -227,13 +356,14 @@ import FormDialog from '../dialogs/FormDialog.vue';
 import { createCodeSchema } from '../domain/codes/createCodeSchema.js';
 import { rgbToHex } from '../utils/color/toHex.js';
 import { Codes } from '../domain/codes/Codes.js';
+import { Categories } from '../domain/categories/Categories.js';
 import { usePage, router } from '@inertiajs/vue3';
 import { whitespace } from '../utils/regex';
 
 //------------------------------------------------------------------------
 // DATA / PROPS
 //------------------------------------------------------------------------
-const props = defineProps(['codebooks', 'project']);
+const props = defineProps(['codebooks', 'project', 'categories']);
 const { allUsers } = useUsers();
 
 //------------------------------------------------------------------------
@@ -284,6 +414,119 @@ const {
 // EXPORTS
 //------------------------------------------------------------------------
 const { exportToCSV } = useExport();
+
+const hasTreeData = computed(
+  () => projectCategories.value.length > 0 || codes.value.length > 0
+);
+
+const handleExportTreeGraph = () => {
+  exportTreeGraphAsPNG({
+    categories: projectCategories.value,
+    codes: codes.value,
+    projectName: props.project.name,
+  });
+};
+
+//------------------------------------------------------------------------
+// CATEGORIES
+//------------------------------------------------------------------------
+const projectCategories = ref(props.categories ?? []);
+const showGroupDialog = ref(false);
+const categoriesPanelOpen = ref(false);
+
+const selectedCodeIds = computed(() => {
+  const ids = [];
+  checkedCodes.value.forEach((isChecked, codeId) => {
+    if (isChecked) ids.push(codeId);
+  });
+  return ids;
+});
+
+const hasSelectedCodes = computed(() => selectedCodeIds.value.length >= 1);
+
+/**
+ * Reverse lookup: codeId → array of category colors the code belongs to.
+ */
+const codeCategoryColors = computed(() => {
+  const map = new Map();
+  for (const cat of projectCategories.value) {
+    if (!cat.color) continue;
+    for (const c of cat.codes ?? []) {
+      if (!map.has(c.id)) {
+        map.set(c.id, []);
+      }
+      map.get(c.id).push(cat.color);
+    }
+  }
+  return map;
+});
+
+const openGroupDialog = () => {
+  showGroupDialog.value = true;
+};
+
+const closeGroupDialog = () => {
+  showGroupDialog.value = false;
+};
+
+const deselectAllCodes = () => {
+  checkedCodes.value.forEach((_val, key) => {
+    checkedCodes.value.set(key, false);
+  });
+};
+
+const handleGroupCodes = async (payload) => {
+  if (payload.mode === 'create') {
+    const { response, error } = await Categories.create({
+      projectId,
+      name: payload.name,
+      description: payload.description,
+      type: payload.type,
+      color: payload.color,
+      codeIds: payload.codeIds,
+    });
+
+    if (error) throw error;
+    if (response?.status >= 400) throw new Error('Failed to create category');
+
+    const category = response.data.category;
+    projectCategories.value.push(category);
+    deselectAllCodes();
+    return category;
+  } else {
+    const { response, error } = await Categories.attachCodes({
+      projectId,
+      categoryId: payload.categoryId,
+      codeIds: payload.codeIds,
+    });
+
+    if (error) throw error;
+    if (response?.status >= 400) throw new Error('Failed to attach codes');
+
+    // Update local category data
+    const idx = projectCategories.value.findIndex(
+      (c) => c.id === payload.categoryId
+    );
+    if (idx !== -1) {
+      projectCategories.value[idx] = response.data.category;
+    }
+
+    deselectAllCodes();
+    return response.data.category;
+  }
+};
+
+const removeCategory = async (category) => {
+  const { error } = await Categories.destroy({
+    projectId,
+    categoryId: category.id,
+  });
+  if (!error) {
+    projectCategories.value = projectCategories.value.filter(
+      (c) => c.id !== category.id
+    );
+  }
+};
 
 //------------------------------------------------------------------------
 // CODE FILTERING
@@ -365,5 +608,13 @@ onMounted(async () => {
   selectVisualizerPlugin({ value: 'list', unlessExists: true });
   if (checkedSources.value.size === 0) checkSource('all');
   if (checkedCodes.value.size === 0) checkCode('all');
+
+  // Load categories from server if not passed via props
+  if (!props.categories || props.categories.length === 0) {
+    const { response } = await Categories.index({ projectId });
+    if (response?.data?.categories) {
+      projectCategories.value = response.data.categories;
+    }
+  }
 });
 </script>
