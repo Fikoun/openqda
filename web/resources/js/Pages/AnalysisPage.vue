@@ -182,12 +182,13 @@
                     <span
                       v-if="codeCategoryColors.has(code.id)"
                       class="flex flex-col gap-0.5 shrink-0"
+                      :title="codeCategoryColors.get(code.id).map(c => `${c.name} (${c.type})`).join('\n')"
                     >
                       <span
-                        v-for="(catColor, idx) in codeCategoryColors.get(code.id)"
+                        v-for="(cat, idx) in codeCategoryColors.get(code.id)"
                         :key="idx"
                         class="w-2.5 h-2.5 rounded-full"
-                        :style="{ backgroundColor: catColor }"
+                        :style="{ backgroundColor: cat.color }"
                       />
                     </span>
                     <span class="grow line-clamp-1"
@@ -286,12 +287,17 @@
                     : 'hover:bg-foreground/5'"
                   @click="handleCategoryClick(category)"
                 >
-                  <div class="min-w-0 flex-1">
+                  <div class="min-w-0 flex-1 flex items-center gap-2">
+                    <span
+                      v-if="category.color"
+                      class="shrink-0 inline-block w-3 h-3 rounded-full border border-black/20"
+                      :style="{ backgroundColor: category.color }"
+                    />
                     <span class="font-medium truncate">{{ category.name }}</span>
-                    <span class="ml-1.5 text-xs text-foreground/40">{{
+                    <span class="text-xs text-foreground/40">{{
                       category.type
                     }}</span>
-                    <span class="ml-1.5 text-xs text-foreground/40">
+                    <span class="text-xs text-foreground/40">
                       ({{ category.codes?.length ?? 0 }} codes)
                     </span>
                   </div>
@@ -477,7 +483,7 @@ const codeCategoryColors = computed(() => {
       if (!map.has(c.id)) {
         map.set(c.id, []);
       }
-      map.get(c.id).push(cat.color);
+      map.get(c.id).push({ color: cat.color, name: cat.name, type: cat.type });
     }
   }
   return map;
@@ -556,14 +562,36 @@ const removeCategory = async (category) => {
 const codeSearchQuery = ref('');
 const activeCategoryFilter = ref(null);
 
+/**
+ * Collect all category IDs in the subtree rooted at the given category ID,
+ * using the flat projectCategories list (which has parent_id on each item).
+ */
+const getDescendantCategoryIds = (categoryId) => {
+  const ids = new Set([categoryId]);
+  for (const cat of projectCategories.value) {
+    if (cat.parent_id === categoryId) {
+      for (const id of getDescendantCategoryIds(cat.id)) {
+        ids.add(id);
+      }
+    }
+  }
+  return ids;
+};
+
 const filteredCodes = computed(() => {
   let result = codes.value;
 
-  // Filter by category first
+  // Filter by category first (includes all descendant sub-categories)
   if (activeCategoryFilter.value) {
-    const categoryCodeIds = new Set(
-      (activeCategoryFilter.value.codes ?? []).map((c) => c.id)
-    );
+    const descendantIds = getDescendantCategoryIds(activeCategoryFilter.value.id);
+    const categoryCodeIds = new Set();
+    for (const cat of projectCategories.value) {
+      if (descendantIds.has(cat.id)) {
+        for (const c of cat.codes ?? []) {
+          categoryCodeIds.add(c.id);
+        }
+      }
+    }
     result = result.filter((code) => categoryCodeIds.has(code.id));
   }
 

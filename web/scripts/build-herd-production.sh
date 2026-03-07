@@ -27,7 +27,7 @@ git pull origin main
 echo -e "${GREEN}✓ Git pull complete${NC}"
 echo ""
 
-# # Step 2: Install PHP dependencies (production mode)
+# # Step 2: Install php82 dependencies (production mode)
 # echo -e "${YELLOW}[2/7] Installing Composer dependencies...${NC}"
 # composer install --no-dev --optimize-autoloader
 # echo -e "${GREEN}✓ Composer dependencies installed${NC}"
@@ -47,22 +47,22 @@ echo ""
 
 # Step 5: Clear and cache Laravel configuration
 echo -e "${YELLOW}[5/7] Optimizing Laravel...${NC}"
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan event:cache
+php82 artisan config:cache
+php82 artisan route:cache
+php82 artisan view:cache
+php82 artisan event:cache
 echo -e "${GREEN}✓ Laravel optimization complete${NC}"
 echo ""
 
 # # Step 6: Run database migrations
 # echo -e "${YELLOW}[6/7] Running database migrations...${NC}"
-# php artisan migrate --force
+# php82 artisan migrate --force
 # echo -e "${GREEN}✓ Database migrations complete${NC}"
 # echo ""
 
 # # Step 7: Clear application cache
 # echo -e "${YELLOW}[7/7] Clearing application cache...${NC}"
-# php artisan cache:clear
+# php82 artisan cache:clear
 # echo -e "${GREEN}✓ Application cache cleared${NC}"
 # echo ""
 
