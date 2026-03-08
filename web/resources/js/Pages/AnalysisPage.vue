@@ -173,35 +173,10 @@
                   <label
                     :for="code.id"
                     class="cursor-pointer select-none line-clamp-1 rounded-md p-2 my-2 flex items-center gap-2"
-                    :style="codeCategoryColors.has(code.id)
-                      ? { backgroundColor: '#ebebeb', border: '1px solid #000' }
-                      : { backgroundColor: code.color }"
                     :title="code.name"
                   >
-                    <!-- Category color dots -->
-                    <span
-                      v-if="codeCategoryColors.has(code.id)"
-                      class="flex flex-col gap-0.5 shrink-0"
-                      :title="codeCategoryColors.get(code.id).map(c => `${c.name} (${c.type})`).join('\n')"
-                    >
-                      <span
-                        v-for="(cat, idx) in codeCategoryColors.get(code.id)"
-                        :key="idx"
-                        class="w-2.5 h-2.5 rounded-full"
-                        :style="{ backgroundColor: cat.color }"
-                      />
-                    </span>
-                    <span class="grow line-clamp-1"
-                      :class="codeCategoryColors.has(code.id) ? 'text-foreground' : ''"
-                    >
-                      <ContrastText v-if="!codeCategoryColors.has(code.id)">{{
-                        code.name
-                      }}</ContrastText>
-                      <template v-else>{{ code.name }}</template>
-                    </span>
-                    <span class="flex items-center"
-                      :class="codeCategoryColors.has(code.id) ? 'text-foreground/60' : ''"
-                    >
+                    <span class="grow line-clamp-1 text-foreground">{{ code.name }}</span>
+                    <span class="flex items-center text-foreground/60">
                       <BarsArrowDownIcon class="w-4 h-4 me-1" />
                       {{ code.text.length }}
                     </span>
@@ -376,7 +351,6 @@ import GroupCodesDialog from './analysis/GroupCodesDialog.vue';
 
 import SelectField from '../form/SelectField.vue';
 import InputField from '../form/InputField.vue';
-import ContrastText from '../Components/text/ContrastText.vue';
 import { useUsers } from '../domain/teams/useUsers.js';
 import Footer from '../Layouts/Footer.vue';
 import FormDialog from '../dialogs/FormDialog.vue';
