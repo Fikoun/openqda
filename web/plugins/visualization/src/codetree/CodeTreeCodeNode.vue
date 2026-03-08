@@ -48,11 +48,6 @@ const getSourceName = (sourceId) => {
       />
       <span v-else class="w-3.5 h-3.5 shrink-0" />
 
-      <span
-        class="w-2.5 h-2.5 rounded-full shrink-0"
-        :style="{ backgroundColor: code.color }"
-      />
-
       <span class="text-sm truncate" :title="code.name">
         {{ code.name }}
       </span>

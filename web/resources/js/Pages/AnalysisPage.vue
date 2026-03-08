@@ -172,9 +172,22 @@
                 <td class="tracking-wide border-0 rounded-md">
                   <label
                     :for="code.id"
-                    class="cursor-pointer select-none line-clamp-1 rounded-md p-2 my-2 flex items-center gap-2"
+                    class="cursor-pointer select-none line-clamp-1 rounded-md p-2 my-2 flex items-center gap-2 bg-[#ebebeb]"
                     :title="code.name"
                   >
+                    <!-- Category color dots -->
+                    <span
+                      v-if="codeCategoryColors.has(code.id)"
+                      class="flex flex-col gap-0.5 shrink-0"
+                      :title="codeCategoryColors.get(code.id).map(c => `${c.name} (${c.type})`).join('\n')"
+                    >
+                      <span
+                        v-for="(cat, idx) in codeCategoryColors.get(code.id)"
+                        :key="idx"
+                        class="w-2.5 h-2.5 rounded-full"
+                        :style="{ backgroundColor: cat.color }"
+                      />
+                    </span>
                     <span class="grow line-clamp-1 text-foreground">{{ code.name }}</span>
                     <span class="flex items-center text-foreground/60">
                       <BarsArrowDownIcon class="w-4 h-4 me-1" />
