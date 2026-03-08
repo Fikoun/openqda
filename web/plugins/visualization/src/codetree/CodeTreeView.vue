@@ -1,13 +1,15 @@
 <script setup>
-import { ref, computed, inject, watch } from 'vue';
+import { ref, computed, inject, nextTick } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import {
   ChevronRightIcon,
   FolderIcon,
   FolderOpenIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/solid/index.js';
 import CodeTreeCategoryNode from './CodeTreeCategoryNode.vue';
 import CodeTreeCodeNode from './CodeTreeCodeNode.vue';
+import { Categories } from '../../../../resources/js/domain/categories/Categories.js';
 
 const props = defineProps({
   codes: { type: Array, default: () => [] },
@@ -23,7 +25,13 @@ const props = defineProps({
 const API = inject('api');
 
 const pageProps = usePage().props;
-const categories = computed(() => pageProps.categories ?? []);
+const projectId = pageProps.project?.id;
+
+// Local reactive categories (writable copy)
+const localCategories = ref([...(pageProps.categories ?? [])]);
+
+// Keep in sync if page props change
+const categories = computed(() => localCategories.value);
 
 // Build lookup: codeId -> code object (with selections in .text)
 const codeMap = computed(() => {
@@ -86,7 +94,6 @@ const expandAll = () => {
   for (const cat of categories.value) {
     expanded.value.add(cat.id);
   }
-  // Also expand all codes
   for (const code of props.codes ?? []) {
     if (props.checkedCodes.get(code.id)) {
       expanded.value.add(`code-${code.id}`);
@@ -104,10 +111,127 @@ const options = ref({
   showEmpty: false,
 });
 
-// Get filtered selections for a code (only from checked sources)
-const getSelectionsForCode = (code) => {
-  if (!code?.text) return [];
-  return code.text.filter((sel) => props.checkedSources.get(sel.source_id));
+// ---- Category CRUD ----
+
+// Rename
+const renamingCategory = ref(null);
+const renameValue = ref('');
+
+const startRename = (cat) => {
+  renamingCategory.value = cat.id;
+  renameValue.value = cat.name;
+  nextTick(() => {
+    const input = document.getElementById('codetree-rename-input');
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+};
+
+const cancelRename = () => {
+  renamingCategory.value = null;
+};
+
+const submitRename = async () => {
+  const name = renameValue.value.trim();
+  if (!name || !renamingCategory.value) return;
+
+  const { response, error } = await Categories.update({
+    projectId,
+    categoryId: renamingCategory.value,
+    data: { name },
+  });
+
+  if (!error && response?.status < 400) {
+    const idx = localCategories.value.findIndex(
+      (c) => c.id === renamingCategory.value
+    );
+    if (idx !== -1) {
+      localCategories.value[idx] = {
+        ...localCategories.value[idx],
+        ...response.data.category,
+      };
+    }
+    pageProps.categories = [...localCategories.value];
+  }
+  renamingCategory.value = null;
+};
+
+// Change type
+const changeType = async ({ categoryId, type }) => {
+  const { response, error } = await Categories.update({
+    projectId,
+    categoryId,
+    data: { type },
+  });
+
+  if (!error && response?.status < 400) {
+    const idx = localCategories.value.findIndex((c) => c.id === categoryId);
+    if (idx !== -1) {
+      localCategories.value[idx] = {
+        ...localCategories.value[idx],
+        ...response.data.category,
+      };
+    }
+    pageProps.categories = [...localCategories.value];
+  }
+};
+
+// Remove category
+const removeCategory = async (cat) => {
+  const { error } = await Categories.destroy({
+    projectId,
+    categoryId: cat.id,
+  });
+  if (!error) {
+    localCategories.value = localCategories.value.filter(
+      (c) => c.id !== cat.id
+    );
+    localCategories.value = localCategories.value.map((c) =>
+      c.parent_id === cat.id ? { ...c, parent_id: null } : c
+    );
+    pageProps.categories = [...localCategories.value];
+  }
+};
+
+// Add code to category
+const addToCategory = async ({ codeId, categoryId }) => {
+  const { response, error } = await Categories.attachCodes({
+    projectId,
+    categoryId,
+    codeIds: [codeId],
+  });
+
+  if (!error && response?.status < 400) {
+    const idx = localCategories.value.findIndex((c) => c.id === categoryId);
+    if (idx !== -1) {
+      localCategories.value[idx] = response.data.category;
+    }
+    pageProps.categories = [...localCategories.value];
+  }
+};
+
+// Detach code from category
+const detachCode = async ({ codeId, categoryId }) => {
+  const { error } = await Categories.detachCodes({
+    projectId,
+    categoryId,
+    codeIds: [codeId],
+  });
+
+  if (!error) {
+    const idx = localCategories.value.findIndex((c) => c.id === categoryId);
+    if (idx !== -1) {
+      localCategories.value[idx] = {
+        ...localCategories.value[idx],
+        codes: (localCategories.value[idx].codes ?? []).filter(
+          (c) => c.id !== codeId
+        ),
+      };
+    }
+    pageProps.categories = [...localCategories.value];
+  }
 };
 </script>
 
@@ -162,20 +286,53 @@ const getSelectionsForCode = (code) => {
       <!-- Tree -->
       <div v-else class="space-y-1">
         <!-- Recursive category nodes -->
-        <CodeTreeCategoryNode
-          v-for="category in rootCategories"
-          :key="category.id"
-          :category="category"
-          :categories="categories"
-          :codeMap="codeMap"
-          :sourceMap="sourceMap"
-          :expanded="expanded"
-          :checkedCodes="checkedCodes"
-          :checkedSources="checkedSources"
-          :showEmpty="options.showEmpty"
-          :depth="0"
-          @toggle="toggleExpand"
-        />
+        <template v-for="category in rootCategories" :key="category.id">
+          <!-- Inline rename overlay -->
+          <div
+            v-if="renamingCategory === category.id"
+            class="flex items-center gap-2 py-1 px-2"
+          >
+            <FolderIcon class="w-4 h-4 shrink-0" :style="{ color: category.color || undefined }" />
+            <input
+              id="codetree-rename-input"
+              v-model="renameValue"
+              class="flex-1 text-sm rounded border border-border bg-surface px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
+              @keydown.enter="submitRename"
+              @keydown.escape="cancelRename"
+            />
+            <button
+              @click="submitRename"
+              class="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/80 transition-colors"
+            >
+              Save
+            </button>
+            <button
+              @click="cancelRename"
+              class="p-0.5 hover:bg-foreground/10 rounded"
+            >
+              <XMarkIcon class="w-3.5 h-3.5 text-foreground/40" />
+            </button>
+          </div>
+
+          <CodeTreeCategoryNode
+            v-else
+            :category="category"
+            :categories="categories"
+            :codeMap="codeMap"
+            :sourceMap="sourceMap"
+            :expanded="expanded"
+            :checkedCodes="checkedCodes"
+            :checkedSources="checkedSources"
+            :showEmpty="options.showEmpty"
+            :depth="0"
+            @toggle="toggleExpand"
+            @rename="startRename"
+            @remove="removeCategory"
+            @changeType="changeType"
+            @addToCategory="addToCategory"
+            @detachCode="detachCode"
+          />
+        </template>
 
         <!-- Uncategorized codes -->
         <div v-if="uncategorizedCodes.length > 0" class="mt-3">
@@ -212,7 +369,9 @@ const getSelectionsForCode = (code) => {
               :expanded="expanded"
               :checkedSources="checkedSources"
               :showEmpty="options.showEmpty"
+              :categories="categories"
               @toggle="toggleExpand"
+              @addToCategory="addToCategory"
             />
           </div>
         </div>
