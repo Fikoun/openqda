@@ -40,17 +40,15 @@
           <div
             v-for="code in codesList.get(source.id)"
             :key="code.id"
-            :style="{ borderColor: code.color }"
-            class="border-l border-r ml-2 mt-3"
+            class="border-l border-r ml-2 mt-3 border-border"
           >
-            <div class="p-2" :style="{ backgroundColor: code.color }">
+            <div class="p-2 bg-foreground/5">
               <span>{{ code.name }}</span>
             </div>
             <div v-for="selection in code.text" :key="selection.source_id">
               <div
                 v-if="source.id === selection.source_id"
-                class="my-1 border-b"
-                :style="{ borderBottomColor: code.color }"
+                class="my-1 border-b border-border"
               >
                 <div
                   class="text-sm text-silver-500 min-w-[6rem] flex justify-between p-2"
