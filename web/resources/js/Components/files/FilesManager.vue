@@ -11,6 +11,7 @@ import {
   DocumentArrowDownIcon,
   PlusIcon,
   PencilSquareIcon,
+  TableCellsIcon,
   XCircleIcon,
 } from '@heroicons/vue/24/solid';
 import { inject, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -46,6 +47,7 @@ const { projectId } = props;
 const allSources = inject('sources');
 const documents = reactive(allSources);
 const accept = ref();
+const csvFileInput = ref(null);
 const { downloadSource, queueFilesForUpload, availableTypes } = useFiles({
   projectId,
 });
@@ -146,6 +148,49 @@ const importFiles = (files) => {
   });
   flashMessage(`Added ${files.length} files for upload.`);
 };
+
+/*---------------------------------------------------------------------------*/
+// IMPORT CSV
+/*---------------------------------------------------------------------------*/
+function onCsvInputChanged() {
+  const files = [...(csvFileInput.value?.files ?? [])];
+  // reset so the same file can be selected again
+  csvFileInput.value.value = '';
+  importCsvFile(files);
+}
+
+async function importCsvFile(files) {
+  const file = files[0];
+  if (!file) return;
+
+  const suffix = prompt('Enter a suffix for the created files:\n(Files will be named: <Respondent_Name>_<suffix>)');
+  if (suffix === null) return; // user cancelled
+
+  isUploading.value = true;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('projectId', usePage().props.projectId ?? 0);
+  formData.append('suffix', suffix.trim());
+
+  try {
+    const response = await axios.post('/files/upload-csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const { newDocuments } = response.data;
+    if (newDocuments?.length) {
+      newDocuments.forEach((doc) => documents.push(doc));
+      flashMessage(`Imported ${newDocuments.length} source(s) from CSV.`);
+    }
+  } catch (error) {
+    flashMessage(
+      error?.response?.data?.message ||
+        'An error occurred while importing the CSV file.',
+      { type: 'error' }
+    );
+  } finally {
+    isUploading.value = false;
+  }
+}
 
 /*---------------------------------------------------------------------------*/
 // RENAME DOCUMENT
@@ -343,6 +388,21 @@ async function fetchAndRenderDocument(document) {
     >
       <PlusIcon class="h-4 w-4 mr-2"></PlusIcon>
       <span>Import</span>
+    </Button>
+    <input
+      ref="csvFileInput"
+      type="file"
+      accept=".csv"
+      class="hidden"
+      @change="onCsvInputChanged"
+    />
+    <Button
+      variant="outline-secondary"
+      class="rounded-xl ml-1 md:ml-3 w-full md:w-auto"
+      @click="csvFileInput.click()"
+    >
+      <TableCellsIcon class="h-4 w-4 mr-2" />
+      <span>Import CSV</span>
     </Button>
   </div>
   <WizardDialog

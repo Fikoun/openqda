@@ -8,6 +8,7 @@ use App\Http\Requests\FetchSourceRequest;
 use App\Http\Requests\IndexSourceRequest;
 use App\Http\Requests\LockSourceRequest;
 use App\Http\Requests\RenameSourceRequest;
+use App\Http\Requests\StoreCsvSourceRequest;
 use App\Http\Requests\StoreSourceRequest;
 use App\Http\Requests\TranscribeSourceRequest;
 use App\Http\Requests\UpdateSourceRequest;
@@ -207,6 +208,110 @@ class SourceController extends Controller
                 'failed' => false,
             ],
         ]);
+    }
+
+    /**
+     * Imports a CSV file and creates one source per row.
+     *
+     * The first row is treated as column headers. Each subsequent row becomes
+     * a plain-text source file formatted as "Question:\nAnswer\n\n" pairs,
+     * named "{index:03d}_{sanitized_column_1_value}.txt".
+     *
+     * @return JsonResponse
+     */
+    public function importCsv(StoreCsvSourceRequest $request): JsonResponse
+    {
+        $file = $request->file('file');
+        $projectId = $request->input('projectId');
+
+        Log::info('Importing CSV file: '.$file->getClientOriginalName().' to project ID: '.$projectId);
+
+        $handle = fopen($file->getRealPath(), 'r');
+        if ($handle === false) {
+            return response()->json(['message' => 'Could not read CSV file.'], 422);
+        }
+
+        $headers = fgetcsv($handle);
+        if (! $headers) {
+            fclose($handle);
+
+            return response()->json(['message' => 'Empty or invalid CSV file.'], 422);
+        }
+
+        $relativePath = 'projects/'.$projectId.'/sources';
+        $suffix = $this->sanitizeCsvFilename($request->input('suffix', ''));
+        $newDocuments = [];
+        $rowIndex = 1;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $name = (count($row) > 1 && trim($row[1]) !== '') ? trim($row[1]) : 'respondent_'.$rowIndex;
+            $sanitized = $this->sanitizeCsvFilename($name);
+            $filename = $suffix !== '' ? $sanitized.'_'.$suffix : $sanitized;
+
+            $content = '';
+            foreach ($headers as $idx => $header) {
+                $answer = isset($row[$idx]) ? $row[$idx] : '';
+                $content .= trim($header).":\n".trim($answer)."\n\n\n";
+            }
+
+            $sourceId = Str::uuid()->toString();
+            $uniqueFilename = $sourceId.'.txt';
+            $txtRelativePath = $relativePath.'/'.$uniqueFilename;
+
+            Storage::put($txtRelativePath, $content);
+            $path = storage_path('app/'.$txtRelativePath);
+            $htmlOutputPath = storage_path('app/'.$relativePath.'/'.$sourceId.'.html');
+
+            $source = Source::updateOrCreate(
+                ['id' => $sourceId],
+                [
+                    'name' => $filename.'.txt',
+                    'upload_path' => $path,
+                    'project_id' => $projectId,
+                    'creating_user_id' => Auth::id(),
+                ]
+            );
+
+            $htmlContent = $this->convertTxtToHtml($path, $projectId);
+
+            SourceStatus::updateOrCreate(
+                ['source_id' => $source->id],
+                ['path' => $htmlOutputPath, 'status' => 'converted:html']
+            );
+
+            $newDocuments[] = [
+                'id' => $source->id,
+                'name' => $source->name,
+                'type' => 'text',
+                'user' => auth()->user()->name,
+                'content' => $htmlContent,
+                'converted' => true,
+                'converting' => false,
+                'exists' => File::exists($htmlOutputPath),
+                'failed' => false,
+            ];
+
+            $rowIndex++;
+        }
+
+        fclose($handle);
+
+        Log::info('CSV import complete. Created '.count($newDocuments).' sources from '.$file->getClientOriginalName());
+
+        return response()->json(['newDocuments' => $newDocuments]);
+    }
+
+    /**
+     * Sanitizes a string for use as a filename component.
+     * Strips special characters, replaces spaces with underscores, and truncates to 50 chars.
+     */
+    private function sanitizeCsvFilename(string $name): string
+    {
+        $name = trim($name);
+        $name = preg_replace('/[^\w\s-]/u', '', $name);
+        $name = preg_replace('/\s+/', '_', $name);
+
+        return substr($name, 0, 50);
     }
 
     /**

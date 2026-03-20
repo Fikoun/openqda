@@ -146,6 +146,7 @@ Route::middleware([
     Route::delete('/files/{id}', [SourceController::class, 'destroy']);
     Route::get('/projects/{project}/formats', [SourceController::class, 'availableFormats'])->name('source.available.formats');
     Route::post('/files/upload', [SourceController::class, 'store'])->name('source.store');
+    Route::post('/files/upload-csv', [SourceController::class, 'importCsv'])->name('source.import-csv');
     Route::post('/files/transcribe', [SourceController::class, 'transcribe'])->name('source.transcribe');
     Route::get('/files/{id}', [SourceController::class, 'fetchDocument']);
     Route::post('/source/update', [SourceController::class, 'update'])->name('source.update');
